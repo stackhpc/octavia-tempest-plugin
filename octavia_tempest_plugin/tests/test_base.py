@@ -213,6 +213,21 @@ class LoadBalancerBaseTest(validators.ValidatorsMixin,
             cls.os_roles_lb_member.load_balancer_v2.AvailabilityZoneClient())
 
     @classmethod
+    def _show_subnet(cls, name_or_uuid):
+        show_subnet = cls.lb_mem_subnet_client.show_subnet
+        list_subnets = cls.lb_mem_subnet_client.list_subnets
+
+        try:
+            subnet = show_subnet(name_or_uuid)
+        except exceptions.NotFound as e:
+            # Fallback to finding subnet by name
+            override_candidates = list_subnets(name_or_uuid)
+            if not override_candidates:
+                raise e
+            subnet = override_candidates.get('subnets')[0]
+        return subnet
+
+    @classmethod
     def resource_setup(cls):
         """Setup resources needed by the tests."""
         super(LoadBalancerBaseTest, cls).resource_setup()
@@ -236,7 +251,6 @@ class LoadBalancerBaseTest(validators.ValidatorsMixin,
         # Set default algorithm as first from the list.
         cls.lb_algorithm = algorithms[0]
 
-        show_subnet = cls.lb_mem_subnet_client.show_subnet
         if CONF.load_balancer.test_with_noop:
             cls.lb_member_vip_net = {'id': uuidutils.generate_uuid()}
             cls.lb_member_vip_subnet = {'id': uuidutils.generate_uuid()}
@@ -254,13 +268,21 @@ class LoadBalancerBaseTest(validators.ValidatorsMixin,
             return
         elif CONF.load_balancer.test_network_override:
             if conf_lb.test_subnet_override:
-                override_subnet = show_subnet(conf_lb.test_subnet_override)
+                override_subnet = cls._show_subnet(conf_lb.test_subnet_override)
             else:
                 override_subnet = None
 
-            show_net = cls.lb_mem_net_client.show_network
-            override_network = show_net(conf_lb.test_network_override)
-            override_network = override_network.get('network')
+            try:
+                show_net = cls.lb_mem_net_client.show_network
+                override_network = show_net(conf_lb.test_network_override)
+                override_network = override_network.get('network')
+            except exceptions.NotFound as e:
+                # Fallback to finding network by name
+                list_net = cls.lb_mem_net_client.list_networks
+                override_candidates = list_net(name=conf_lb.test_network_override)
+                if not override_candidates:
+                    raise e
+                override_network = override_candidates.get('networks')[0]
 
             cls.lb_member_vip_net = override_network
             cls.lb_member_vip_subnet = override_subnet
@@ -271,7 +293,7 @@ class LoadBalancerBaseTest(validators.ValidatorsMixin,
 
             if (CONF.load_balancer.test_with_ipv6 and
                     conf_lb.test_IPv6_subnet_override):
-                override_ipv6_subnet = show_subnet(
+                override_ipv6_subnet = cls._show_subnet(
                     conf_lb.test_IPv6_subnet_override)
                 cls.lb_member_vip_ipv6_subnet = override_ipv6_subnet
                 cls.lb_member_1_ipv6_subnet = override_ipv6_subnet
