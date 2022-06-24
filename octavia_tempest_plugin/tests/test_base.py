@@ -136,31 +136,6 @@ class LoadBalancerBaseTest(validators.ValidatorsMixin,
         cls.set_network_resources()
         super(LoadBalancerBaseTest, cls).setup_credentials()
 
-        # Log the user roles for this test run
-        role_name_cache = {}
-        for cred in cls.credentials:
-            user_roles = []
-            if isinstance(cred, list):
-                user_name = cred[0]
-                cred_obj = getattr(cls, 'os_roles_' + cred[0])
-            else:
-                user_name = cred
-                cred_obj = getattr(cls, 'os_' + cred)
-            params = {'user.id': cred_obj.credentials.user_id,
-                      'project.id': cred_obj.credentials.project_id}
-            roles = cls.os_admin.role_assignments_client.list_role_assignments(
-                **params)['role_assignments']
-            for role in roles:
-                role_id = role['role']['id']
-                try:
-                    role_name = role_name_cache[role_id]
-                except KeyError:
-                    role_name = cls.os_admin.roles_v3_client.show_role(
-                        role_id)['role']['name']
-                    role_name_cache[role_id] = role_name
-                user_roles.append([role_name, role['scope']])
-            LOG.info("User %s has roles: %s", user_name, user_roles)
-
     @classmethod
     def setup_clients(cls):
         """Setup client aliases."""
