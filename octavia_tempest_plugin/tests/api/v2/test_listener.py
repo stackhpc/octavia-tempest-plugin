@@ -21,6 +21,7 @@ from tempest import config
 from tempest.lib.common.utils import data_utils
 from tempest.lib import decorators
 from tempest.lib import exceptions
+import testtools
 
 from octavia_tempest_plugin.common import constants as const
 from octavia_tempest_plugin.tests import test_base
@@ -79,12 +80,18 @@ class ListenerAPITest(test_base.LoadBalancerBaseTest):
     def test_tcp_listener_create(self):
         self._test_listener_create(const.TCP, 8002)
 
+    @decorators.idempotent_id('1a6ba0d0-f309-4088-a686-dda0e9ab7e43')
+    @testtools.skipUnless(
+        CONF.loadbalancer_feature_enabled.prometheus_listener_enabled,
+        'PROMETHEUS listener tests are disabled in the tempest configuration.')
+    def test_prometheus_listener_create(self):
+        if not self.mem_listener_client.is_version_supported(
+                self.api_version, '2.25'):
+            raise self.skipException('PROMETHEUS listeners are only available '
+                                     'on Octavia API version 2.25 or newer.')
+        self._test_listener_create(const.PROMETHEUS, 8090)
+
     @decorators.idempotent_id('7b53f336-47bc-45ae-bbd7-4342ef0673fc')
-    # Skipping due to a status update bug in the amphora driver.
-    @decorators.skip_because(
-        bug='2007979',
-        bug_type='storyboard',
-        condition=CONF.load_balancer.provider in const.AMPHORA_PROVIDERS)
     def test_udp_listener_create(self):
         self._test_listener_create(const.UDP, 8003)
 
@@ -158,7 +165,8 @@ class ListenerAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
@@ -369,16 +377,22 @@ class ListenerAPITest(test_base.LoadBalancerBaseTest):
     def test_https_listener_list(self):
         self._test_listener_list(const.HTTPS, 8030)
 
+    @decorators.idempotent_id('5473e071-8277-4ac5-9277-01ecaf46e274')
+    @testtools.skipUnless(
+        CONF.loadbalancer_feature_enabled.prometheus_listener_enabled,
+        'PROMETHEUS listener tests are disabled in the tempest configuration.')
+    def test_prometheus_listener_list(self):
+        if not self.mem_listener_client.is_version_supported(
+                self.api_version, '2.25'):
+            raise self.skipException('PROMETHEUS listeners are only available '
+                                     'on Octavia API version 2.25 or newer.')
+        self._test_listener_list(const.PROMETHEUS, 8091)
+
     @decorators.idempotent_id('1cd476e2-7788-415e-bcaf-c377acfc9794')
     def test_tcp_listener_list(self):
         self._test_listener_list(const.TCP, 8030)
 
     @decorators.idempotent_id('c08fb77e-b317-4d6f-b430-91f5b27ebac6')
-    # Skipping due to a status update bug in the amphora driver.
-    @decorators.skip_because(
-        bug='2007979',
-        bug_type='storyboard',
-        condition=CONF.load_balancer.provider in const.AMPHORA_PROVIDERS)
     def test_udp_listener_list(self):
         self._test_listener_list(const.UDP, 8040)
 
@@ -551,8 +565,8 @@ class ListenerAPITest(test_base.LoadBalancerBaseTest):
         if CONF.load_balancer.RBAC_test_type == const.OWNERADMIN:
             expected_allowed = ['os_primary', 'os_roles_lb_member2']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_admin', 'os_primary',
-                                'os_roles_lb_member2', 'os_roles_lb_observer',
+            expected_allowed = ['os_primary', 'os_roles_lb_member2',
+                                'os_roles_lb_observer',
                                 'os_roles_lb_global_observer']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_roles_lb_observer', 'os_roles_lb_member2']
@@ -566,8 +580,8 @@ class ListenerAPITest(test_base.LoadBalancerBaseTest):
         if CONF.load_balancer.RBAC_test_type == const.OWNERADMIN:
             expected_allowed = ['os_admin', 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_system_reader',
-                                'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_system_reader', 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_system_reader',
                                 'os_roles_lb_admin', 'os_roles_lb_member',
@@ -591,7 +605,7 @@ class ListenerAPITest(test_base.LoadBalancerBaseTest):
         #       a superscope of "project_reader". This means it can read
         #       objects in the "admin" credential's project.
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_admin', 'os_primary', 'os_system_admin',
+            expected_allowed = ['os_admin', 'os_primary', 'os_roles_lb_admin',
                                 'os_system_reader', 'os_roles_lb_observer',
                                 'os_roles_lb_global_observer',
                                 'os_roles_lb_member', 'os_roles_lb_member2']
@@ -735,16 +749,22 @@ class ListenerAPITest(test_base.LoadBalancerBaseTest):
     def test_https_listener_show(self):
         self._test_listener_show(const.HTTPS, 8051)
 
+    @decorators.idempotent_id('b851b754-4333-4115-9063-a9fce44c2e46')
+    @testtools.skipUnless(
+        CONF.loadbalancer_feature_enabled.prometheus_listener_enabled,
+        'PROMETHEUS listener tests are disabled in the tempest configuration.')
+    def test_prometheus_listener_show(self):
+        if not self.mem_listener_client.is_version_supported(
+                self.api_version, '2.25'):
+            raise self.skipException('PROMETHEUS listeners are only available '
+                                     'on Octavia API version 2.25 or newer.')
+        self._test_listener_show(const.PROMETHEUS, 8092)
+
     @decorators.idempotent_id('1fcbbee2-b697-4890-b6bf-d308ac1c94cd')
     def test_tcp_listener_show(self):
         self._test_listener_show(const.TCP, 8052)
 
     @decorators.idempotent_id('1dea3a6b-c95b-4e91-b591-1aa9cbcd0d1d')
-    # Skipping due to a status update bug in the amphora driver.
-    @decorators.skip_because(
-        bug='2007979',
-        bug_type='storyboard',
-        condition=CONF.load_balancer.provider in const.AMPHORA_PROVIDERS)
     def test_udp_listener_show(self):
         self._test_listener_show(const.UDP, 8053)
 
@@ -868,8 +888,8 @@ class ListenerAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_system_reader',
-                                'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_system_reader', 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_system_reader',
                                 'os_roles_lb_admin',
@@ -888,16 +908,22 @@ class ListenerAPITest(test_base.LoadBalancerBaseTest):
     def test_https_listener_update(self):
         self._test_listener_update(const.HTTPS, 8061)
 
+    @decorators.idempotent_id('cbba6bf8-9184-4da5-95e9-5efe1f89ddf0')
+    @testtools.skipUnless(
+        CONF.loadbalancer_feature_enabled.prometheus_listener_enabled,
+        'PROMETHEUS listener tests are disabled in the tempest configuration.')
+    def test_prometheus_listener_update(self):
+        if not self.mem_listener_client.is_version_supported(
+                self.api_version, '2.25'):
+            raise self.skipException('PROMETHEUS listeners are only available '
+                                     'on Octavia API version 2.25 or newer.')
+        self._test_listener_update(const.PROMETHEUS, 8093)
+
     @decorators.idempotent_id('8d933121-db03-4ccc-8b77-4e879064a9ba')
     def test_tcp_listener_update(self):
         self._test_listener_update(const.TCP, 8062)
 
     @decorators.idempotent_id('fd02dbfd-39ce-41c2-b181-54fc7ad91707')
-    # Skipping due to a status update bug in the amphora driver.
-    @decorators.skip_because(
-        bug='2007979',
-        bug_type='storyboard',
-        condition=CONF.load_balancer.provider in const.AMPHORA_PROVIDERS)
     def test_udp_listener_update(self):
         self._test_listener_update(const.UDP, 8063)
 
@@ -1011,7 +1037,8 @@ class ListenerAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
@@ -1139,16 +1166,22 @@ class ListenerAPITest(test_base.LoadBalancerBaseTest):
     def test_https_listener_delete(self):
         self._test_listener_delete(const.HTTPS, 8071)
 
+    @decorators.idempotent_id('322a6372-6b56-4a3c-87e3-dd82074bc83e')
+    @testtools.skipUnless(
+        CONF.loadbalancer_feature_enabled.prometheus_listener_enabled,
+        'PROMETHEUS listener tests are disabled in the tempest configuration.')
+    def test_prometheus_listener_delete(self):
+        if not self.mem_listener_client.is_version_supported(
+                self.api_version, '2.25'):
+            raise self.skipException('PROMETHEUS listeners are only available '
+                                     'on Octavia API version 2.25 or newer.')
+        self._test_listener_delete(const.PROMETHEUS, 8094)
+
     @decorators.idempotent_id('f5ca019d-2b33-48f9-9c2d-2ec169b423ca')
     def test_tcp_listener_delete(self):
         self._test_listener_delete(const.TCP, 8072)
 
     @decorators.idempotent_id('86bd9717-e3e9-41e3-86c4-888c64455926')
-    # Skipping due to a status update bug in the amphora driver.
-    @decorators.skip_because(
-        bug='2007979',
-        bug_type='storyboard',
-        condition=CONF.load_balancer.provider in const.AMPHORA_PROVIDERS)
     def test_udp_listener_delete(self):
         self._test_listener_delete(const.UDP, 8073)
 
@@ -1184,7 +1217,8 @@ class ListenerAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
@@ -1223,11 +1257,6 @@ class ListenerAPITest(test_base.LoadBalancerBaseTest):
         self._test_listener_show_stats(const.TCP, 8082)
 
     @decorators.idempotent_id('a4c1f199-923b-41e4-a134-c91e590e20c4')
-    # Skipping due to a status update bug in the amphora driver.
-    @decorators.skip_because(
-        bug='2007979',
-        bug_type='storyboard',
-        condition=CONF.load_balancer.provider in const.AMPHORA_PROVIDERS)
     def test_udp_listener_show_stats(self):
         self._test_listener_show_stats(const.UDP, 8083)
 

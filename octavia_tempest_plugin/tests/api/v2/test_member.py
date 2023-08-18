@@ -141,6 +141,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
         cls.listener_pool_cache[listener_pool_key] = pool[const.ID]
         return pool[const.ID]
 
+
+class MemberAPITest1(MemberAPITest):
     @decorators.idempotent_id('0684575a-0970-4fa8-8006-10c2b39c5f2b')
     def test_ipv4_HTTP_LC_alt_monitor_member_create(self):
         pool_id = self._listener_pool_create(
@@ -900,7 +902,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
@@ -1231,8 +1234,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
         if CONF.load_balancer.RBAC_test_type == const.OWNERADMIN:
             expected_allowed = ['os_admin', 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_system_reader',
-                                'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_system_reader', 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_system_reader',
                                 'os_roles_lb_admin', 'os_roles_lb_member',
@@ -1253,7 +1256,7 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
         #       a superscope of "project_reader". This means it can read
         #       objects in the "admin" credential's project.
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_admin', 'os_system_admin',
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_system_reader', 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_system_reader',
@@ -1375,6 +1378,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             self.assertTrue(not any(["" in member[const.TAGS]
                                      for member in list_of_members]))
 
+
+class MemberAPITest2(MemberAPITest):
     @decorators.idempotent_id('2674b363-7922-494a-b121-cf415dbbb716')
     def test_HTTP_LC_alt_monitor_member_show(self):
         pool_id = self._listener_pool_create(
@@ -1794,8 +1799,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_system_reader',
-                                'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_system_reader', 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_system_reader',
                                 'os_roles_lb_admin',
@@ -2251,7 +2256,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
@@ -2709,7 +2715,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
@@ -2954,7 +2961,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']

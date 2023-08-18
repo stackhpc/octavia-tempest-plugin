@@ -61,6 +61,9 @@ OctaviaGroup = [
     cfg.StrOpt('octavia_svc_username', default='admin',
                help='The service_auth username the Octavia services are using'
                     'to access other OpenStack services.'),
+    cfg.BoolOpt('log_user_roles',
+                default=True,
+                help='Log the user roles at the start of every test.'),
     # load-balancer specific options
     cfg.FloatOpt('check_interval',
                  default=5,
@@ -241,7 +244,11 @@ OctaviaGroup = [
                 help='Does the load-balancer service API policies enforce '
                      'the new keystone default roles? This configuration '
                      'value should be same as octavia.conf: '
-                     '[oslo_policy].enforce_new_defaults option.'),
+                     '[oslo_policy].enforce_new_defaults option.',
+                deprecated_for_removal=True,
+                deprecated_reason='Consolidated into the RBAC_test_type '
+                                  'setting.',
+                deprecated_since='bobcat'),
 ]
 
 lb_feature_enabled_group = cfg.OptGroup(name='loadbalancer-feature-enabled',
@@ -285,6 +292,8 @@ LBFeatureEnabledGroup = [
                 help="Whether the log offload tests will run. These require "
                      "the tempest instance have access to the log files "
                      "specified in the tempest configuration."),
+    cfg.BoolOpt('prometheus_listener_enabled', default=True,
+                help="Whether the PROMETHEUS listener tests will run."),
 ]
 
 # Extending this enforce_scope group defined in tempest

@@ -408,7 +408,8 @@ class PoolAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
@@ -433,6 +434,11 @@ class PoolAPITest(test_base.LoadBalancerBaseTest):
             if hasattr(e, 'resp_body'):
                 message = e.resp_body.get('faultstring', message)
             raise testtools.TestCase.skipException(message)
+
+        self.addCleanup(
+            self.mem_pool_client.cleanup_pool,
+            pool[const.ID],
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
 
         waiters.wait_for_status(
             self.mem_lb_client.show_loadbalancer, self.lb_id,
@@ -584,7 +590,6 @@ class PoolAPITest(test_base.LoadBalancerBaseTest):
     def _test_pool_list(self, pool_protocol, algorithm):
         """Tests pool list API and field filtering.
 
-        * Create a clean loadbalancer.
         * Create three pools.
         * Validates that other accounts cannot list the pools.
         * List the pools using the default sort order.
@@ -605,14 +610,7 @@ class PoolAPITest(test_base.LoadBalancerBaseTest):
                 'Skipping this test as load balancing algorithm '
                 'SOURCE_IP_PORT requires API version 2.13 or newer.')
 
-        lb_name = data_utils.rand_name("lb_member_lb2_pool-list")
-        lb = self.mem_lb_client.create_loadbalancer(
-            name=lb_name, provider=CONF.load_balancer.provider,
-            vip_network_id=self.lb_member_vip_net[const.ID])
-        lb_id = lb[const.ID]
-        self.addCleanup(
-            self.mem_lb_client.cleanup_loadbalancer,
-            lb_id)
+        lb_id = self.lb_id
 
         waiters.wait_for_status(self.mem_lb_client.show_loadbalancer,
                                 lb_id,
@@ -755,8 +753,8 @@ class PoolAPITest(test_base.LoadBalancerBaseTest):
         if CONF.load_balancer.RBAC_test_type == const.OWNERADMIN:
             expected_allowed = ['os_primary', 'os_roles_lb_member2']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_admin', 'os_primary',
-                                'os_roles_lb_member2', 'os_roles_lb_observer',
+            expected_allowed = ['os_primary', 'os_roles_lb_member2',
+                                'os_roles_lb_observer',
                                 'os_roles_lb_global_observer']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_roles_lb_observer', 'os_roles_lb_member2']
@@ -770,8 +768,8 @@ class PoolAPITest(test_base.LoadBalancerBaseTest):
         if CONF.load_balancer.RBAC_test_type == const.OWNERADMIN:
             expected_allowed = ['os_admin', 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_system_reader',
-                                'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_system_reader', 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_system_reader',
                                 'os_roles_lb_admin', 'os_roles_lb_member',
@@ -794,7 +792,7 @@ class PoolAPITest(test_base.LoadBalancerBaseTest):
         #       a superscope of "project_reader". This means it can read
         #       objects in the "admin" credential's project.
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_admin', 'os_primary', 'os_system_admin',
+            expected_allowed = ['os_admin', 'os_primary', 'os_roles_lb_admin',
                                 'os_system_reader', 'os_roles_lb_observer',
                                 'os_roles_lb_global_observer',
                                 'os_roles_lb_member', 'os_roles_lb_member2']
@@ -1080,6 +1078,11 @@ class PoolAPITest(test_base.LoadBalancerBaseTest):
                 message = e.resp_body.get('faultstring', message)
             raise testtools.TestCase.skipException(message)
 
+        self.addCleanup(
+            self.mem_pool_client.cleanup_pool,
+            pool[const.ID],
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
+
         waiters.wait_for_status(
             self.mem_lb_client.show_loadbalancer, self.lb_id,
             const.PROVISIONING_STATUS, const.ACTIVE,
@@ -1129,8 +1132,8 @@ class PoolAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_system_reader',
-                                'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_system_reader', 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_system_reader',
                                 'os_roles_lb_admin',
@@ -1315,6 +1318,11 @@ class PoolAPITest(test_base.LoadBalancerBaseTest):
                 message = e.resp_body.get('faultstring', message)
             raise testtools.TestCase.skipException(message)
 
+        self.addCleanup(
+            self.mem_pool_client.cleanup_pool,
+            pool[const.ID],
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
+
         waiters.wait_for_status(
             self.mem_lb_client.show_loadbalancer, self.lb_id,
             const.PROVISIONING_STATUS, const.ACTIVE,
@@ -1364,7 +1372,8 @@ class PoolAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
@@ -1647,6 +1656,11 @@ class PoolAPITest(test_base.LoadBalancerBaseTest):
                 message = e.resp_body.get('faultstring', message)
             raise testtools.TestCase.skipException(message)
 
+        self.addCleanup(
+            self.mem_pool_client.cleanup_pool,
+            pool[const.ID],
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
+
         waiters.wait_for_status(
             self.mem_lb_client.show_loadbalancer,
             self.lb_id, const.PROVISIONING_STATUS,
@@ -1661,7 +1675,8 @@ class PoolAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
