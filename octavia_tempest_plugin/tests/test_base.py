@@ -56,9 +56,10 @@ class LoadBalancerBaseTest(validators.ValidatorsMixin,
             'admin', 'primary', ['lb_admin', CONF.load_balancer.admin_role],
             ['lb_member', CONF.load_balancer.member_role],
             ['lb_member2', CONF.load_balancer.member_role]]
-    elif CONF.load_balancer.enforce_new_defaults:
+    elif CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
         credentials = [
-            'admin', 'primary', ['lb_admin', CONF.load_balancer.admin_role],
+            'admin', 'primary',
+            ['lb_admin', CONF.load_balancer.admin_role, 'admin'],
             ['lb_observer', CONF.load_balancer.observer_role, 'reader'],
             ['lb_global_observer', CONF.load_balancer.global_observer_role,
              'reader'],
@@ -71,8 +72,10 @@ class LoadBalancerBaseTest(validators.ValidatorsMixin,
             ['lb_observer', CONF.load_balancer.observer_role, 'reader'],
             ['lb_global_observer', CONF.load_balancer.global_observer_role,
              'reader'],
-            ['lb_member', CONF.load_balancer.member_role],
-            ['lb_member2', CONF.load_balancer.member_role]]
+            # Note: Some projects are now requiring the 'member' role by
+            # default (nova for example) so make sure our creds have this role
+            ['lb_member', CONF.load_balancer.member_role, 'member'],
+            ['lb_member2', CONF.load_balancer.member_role, 'member']]
 
     # If scope enforcement is enabled, add in the system scope credentials.
     # The project scope is already handled by the above credentials.
@@ -135,6 +138,9 @@ class LoadBalancerBaseTest(validators.ValidatorsMixin,
         # Do not auto create network resources
         cls.set_network_resources()
         super(LoadBalancerBaseTest, cls).setup_credentials()
+
+        if not CONF.load_balancer.log_user_roles:
+            return
 
     @classmethod
     def setup_clients(cls):
@@ -664,6 +670,20 @@ class LoadBalancerBaseTestWithCompute(LoadBalancerBaseTest):
                 cls.lb_mem_SGr_client.delete_security_group_rule,
                 cls.lb_mem_SGr_client.show_security_group_rule,
                 SGr['id'])
+            # Create a security group rule to allow 9443 (test webservers)
+            # Used in the pool backend encryption client authentication tests
+            SGr = cls.lb_mem_SGr_client.create_security_group_rule(
+                direction='ingress',
+                security_group_id=cls.lb_member_sec_group['id'],
+                protocol='tcp',
+                ethertype='IPv4',
+                port_range_min=9443,
+                port_range_max=9443)['security_group_rule']
+            cls.addClassResourceCleanup(
+                waiters.wait_for_not_found,
+                cls.lb_mem_SGr_client.delete_security_group_rule,
+                cls.lb_mem_SGr_client.show_security_group_rule,
+                SGr['id'])
             # Create a security group rule to allow UDP 9999 (test webservers)
             # Port 9999 is used to illustrate health monitor ERRORs on closed
             # ports.
@@ -728,6 +748,20 @@ class LoadBalancerBaseTestWithCompute(LoadBalancerBaseTest):
                     ethertype='IPv6',
                     port_range_min=443,
                     port_range_max=443)['security_group_rule']
+                cls.addClassResourceCleanup(
+                    waiters.wait_for_not_found,
+                    cls.lb_mem_SGr_client.delete_security_group_rule,
+                    cls.lb_mem_SGr_client.show_security_group_rule,
+                    SGr['id'])
+                # Create a security group rule to allow 9443 (test webservers)
+                # Used in the pool encryption client authentication tests
+                SGr = cls.lb_mem_SGr_client.create_security_group_rule(
+                    direction='ingress',
+                    security_group_id=cls.lb_member_sec_group['id'],
+                    protocol='tcp',
+                    ethertype='IPv6',
+                    port_range_min=9443,
+                    port_range_max=9443)['security_group_rule']
                 cls.addClassResourceCleanup(
                     waiters.wait_for_not_found,
                     cls.lb_mem_SGr_client.delete_security_group_rule,
