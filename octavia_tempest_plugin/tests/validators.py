@@ -105,7 +105,7 @@ class ValidatorsMixin(test.BaseTestCase):
                 return response_text
             except requests.exceptions.Timeout:
                 # Don't sleep as we have already waited the interval.
-                LOG.info('Request for {} timed out. Retrying.'.format(URL))
+                LOG.info('Request for %s timed out. Retrying.', URL)
             except (exceptions.InvalidHttpSuccessCode,
                     exceptions.InvalidHTTPResponseBody,
                     requests.exceptions.SSLError):
@@ -113,8 +113,8 @@ class ValidatorsMixin(test.BaseTestCase):
                     session.close()
                 raise
             except Exception as e:
-                LOG.info('Validate URL got exception: {0}. '
-                         'Retrying.'.format(e))
+                LOG.info('Validate URL got exception: %s. '
+                         'Retrying.', e)
                 time.sleep(request_interval)
         if requests_session is None:
             session.close()
@@ -412,7 +412,7 @@ class ValidatorsMixin(test.BaseTestCase):
                     return
             except Exception:
                 LOG.warning('Server is not passing initial traffic. Waiting.')
-                time.sleep(1)
+            time.sleep(request_interval)
 
         LOG.debug('Loadbalancer wait for load balancer response totals: %s',
                   response_counts)
@@ -421,3 +421,36 @@ class ValidatorsMixin(test.BaseTestCase):
                                                           protocol_port))
         LOG.error(message)
         raise Exception(message)
+
+    def make_udp_requests_with_retries(
+            self, vip_address, number_of_retries, dst_port,
+            src_port=None, socket_timeout=20):
+        """Send UDP packets using retries mechanism
+
+        The delivery of data to the destination cannot be guaranteed in UDP.
+        In case when UDP package is getting lost and we might want to check
+        what could be the reason for that (Network issues or Server Side),
+        well need to send more packets to get into the conclusion.
+
+        :param vip_address: LB VIP address
+        :param number_of_retries: integer number of retries
+        :param dst_port: UDP server destination port
+        :param src_port: UDP source port to bind for UDP connection
+        :param socket_timeout: UDP socket timeout
+        :return: None if all UPD retries failed, else first successful
+                 response data from UDP server.
+        """
+        retry_number = 0
+        received_data = None
+        while retry_number < number_of_retries:
+            LOG.info('make_udp_requests_with_retries attempt number: %s',
+                     retry_number)
+            retry_number += 1
+            try:
+                received_data = self.make_udp_request(
+                    vip_address, dst_port, timeout=socket_timeout,
+                    source_port=src_port)
+                break
+            except Exception as e:
+                LOG.warning('make_udp_request has failed with: %s', e)
+        return received_data

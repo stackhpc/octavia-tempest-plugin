@@ -29,6 +29,7 @@ from octavia_tempest_plugin.tests import waiters
 
 CONF = config.CONF
 
+
 # Member port numbers need to be unique on the shared pools so generate them
 @misc.singleton
 class MemberPort(object):
@@ -104,6 +105,11 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
         cls.current_listener_port += 1
         listener = cls.mem_listener_client.create_listener(**listener_kwargs)
 
+        cls.addClassResourceCleanup(
+            cls.mem_listener_client.cleanup_listener,
+            listener[const.ID],
+            lb_client=cls.mem_lb_client, lb_id=cls.lb_id)
+
         waiters.wait_for_status(cls.mem_lb_client.show_loadbalancer,
                                 cls.lb_id, const.PROVISIONING_STATUS,
                                 const.ACTIVE,
@@ -133,6 +139,11 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
                 message = e.resp_body.get('faultstring', message)
             raise testtools.TestCase.skipException(message)
 
+        cls.addClassResourceCleanup(
+            cls.mem_pool_client.cleanup_pool,
+            pool[const.ID],
+            lb_client=cls.mem_lb_client, lb_id=cls.lb_id)
+
         waiters.wait_for_status(cls.mem_lb_client.show_loadbalancer,
                                 cls.lb_id, const.PROVISIONING_STATUS,
                                 const.ACTIVE,
@@ -140,6 +151,19 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
                                 CONF.load_balancer.build_timeout)
         cls.listener_pool_cache[listener_pool_key] = pool[const.ID]
         return pool[const.ID]
+
+
+class MemberAPITest1(MemberAPITest):
+    @decorators.idempotent_id('c1e029b0-b6d6-4fa6-8ccb-5c3f3aa293b0')
+    def test_ipv4_HTTP_LC_backup_member_create(self):
+        if not self.mem_member_client.is_version_supported(
+                self.api_version, '2.1'):
+            raise self.skipException('Backup member support is only available '
+                                     'in Octavia API version 2.1 or newer')
+        pool_id = self._listener_pool_create(
+            listener_protocol=const.HTTP, pool_protocol=const.HTTP,
+            algorithm=const.LB_ALGORITHM_LEAST_CONNECTIONS)
+        self._test_member_create(4, pool_id, backup_member=True)
 
     @decorators.idempotent_id('0684575a-0970-4fa8-8006-10c2b39c5f2b')
     def test_ipv4_HTTP_LC_alt_monitor_member_create(self):
@@ -499,6 +523,17 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             algorithm=const.LB_ALGORITHM_LEAST_CONNECTIONS)
         self._test_member_create(6, pool_id)
 
+    @decorators.idempotent_id('b1994c5d-74b8-44be-b9e5-5e18e9219b61')
+    def test_ipv6_HTTP_LC_backup_member_create(self):
+        if not self.mem_member_client.is_version_supported(
+                self.api_version, '2.1'):
+            raise self.skipException('Backup member support is only available '
+                                     'in Octavia API version 2.1 or newer')
+        pool_id = self._listener_pool_create(
+            listener_protocol=const.HTTP, pool_protocol=const.HTTP,
+            algorithm=const.LB_ALGORITHM_LEAST_CONNECTIONS)
+        self._test_member_create(6, pool_id, backup_member=True)
+
     @decorators.idempotent_id('6056724b-d046-497a-ae31-c02af67d4fbb')
     def test_ipv6_HTTPS_LC_alt_monitor_member_create(self):
         pool_id = self._listener_pool_create(
@@ -830,12 +865,12 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
         self._test_member_create(6, pool_id)
 
     def _test_member_create(self, ip_version, pool_id,
-                            alternate_monitor=False):
+                            alternate_monitor=False, backup_member=False):
         """Tests member create and basic show APIs.
 
         * Tests that users without the loadbalancer member role cannot
           create members.
-        * Create a fully populated member.
+        * Create a fully populated member or backup member.
         * If driver doesnt support Monitors, allow to create without monitor
         * Show member details.
         * Validate the show reflects the requested values.
@@ -870,7 +905,7 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
         if self.mem_member_client.is_version_supported(
                 self.api_version, '2.1'):
             member_kwargs.update({
-                const.BACKUP: False,
+                const.BACKUP: backup_member,
             })
 
         if self.mem_member_client.is_version_supported(
@@ -900,7 +935,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
@@ -912,6 +948,11 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
                 obj_id=self.lb_id, **member_kwargs)
 
         member = self.mem_member_client.create_member(**member_kwargs)
+
+        self.addCleanup(
+            self.mem_member_client.cleanup_member,
+            member[const.ID], pool_id=pool_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
 
         waiters.wait_for_status(
             self.mem_lb_client.show_loadbalancer, self.lb_id,
@@ -952,6 +993,17 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
 
         for item in equal_items:
             self.assertEqual(member_kwargs[item], member[item])
+
+    @decorators.skip_because(bug='2045803')
+    @decorators.idempotent_id('b982188a-d55f-438a-a1b2-224f0ec8ff12')
+    def test_HTTP_LC_backup_member_list(self):
+        if not self.mem_member_client.is_version_supported(
+                self.api_version, '2.1'):
+            raise self.skipException('Backup member support is only available '
+                                     'in Octavia API version 2.1 or newer')
+        self._test_member_list(const.HTTP,
+                               const.LB_ALGORITHM_LEAST_CONNECTIONS,
+                               backup_member=True)
 
     @decorators.idempotent_id('fcc5c6cd-d1c2-4a49-8d26-2268608e59a6')
     def test_HTTP_LC_member_list(self):
@@ -1053,11 +1105,11 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
         self._test_member_list(const.UDP,
                                const.LB_ALGORITHM_SOURCE_IP_PORT)
 
-    def _test_member_list(self, pool_protocol, algorithm):
+    def _test_member_list(self, pool_protocol, algorithm, backup_member=False):
         """Tests member list API and field filtering.
 
         * Create a clean pool.
-        * Create three members.
+        * Create three members (one backup member if backup_member is True).
         * Validates that other accounts cannot list the members.
         * List the members using the default sort order.
         * List the members using descending sort order.
@@ -1121,6 +1173,9 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             const.ADDRESS: '192.0.2.1',
             const.PROTOCOL_PORT: 101,
         }
+
+        if backup_member:
+            member1_kwargs[const.BACKUP] = True
 
         if self.mem_member_client.is_version_supported(
                 self.api_version, '2.5'):
@@ -1231,8 +1286,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
         if CONF.load_balancer.RBAC_test_type == const.OWNERADMIN:
             expected_allowed = ['os_admin', 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_system_reader',
-                                'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_system_reader', 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_system_reader',
                                 'os_roles_lb_admin', 'os_roles_lb_member',
@@ -1253,7 +1308,7 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
         #       a superscope of "project_reader". This means it can read
         #       objects in the "admin" credential's project.
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_admin', 'os_system_admin',
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_system_reader', 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_system_reader',
@@ -1333,6 +1388,17 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
         self.assertEqual(member2[const.PROTOCOL_PORT],
                          members[0][const.PROTOCOL_PORT])
 
+        # Test filtering using the backup flag
+        if backup_member:
+            members = self.mem_member_client.list_members(
+                pool_id,
+                query_params='{backup}={backup_value}'.format(
+                    backup=const.BACKUP,
+                    backup_value=const.BACKUP_TRUE))
+            self.assertEqual(1, len(members))
+            self.assertEqual(member1_name, members[0][const.NAME])
+            self.assertTrue(members[0][const.BACKUP])
+
         # Test combined params
         members = self.mem_member_client.list_members(
             pool_id,
@@ -1374,6 +1440,19 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             # Tests that filtering by an empty tag will return an empty list
             self.assertTrue(not any(["" in member[const.TAGS]
                                      for member in list_of_members]))
+
+
+class MemberAPITest2(MemberAPITest):
+    @decorators.idempotent_id('048f4b15-1cb4-49ac-82d6-b2ac7fe9d03b')
+    def test_HTTP_LC_backup_member_show(self):
+        if not self.mem_member_client.is_version_supported(
+                self.api_version, '2.1'):
+            raise self.skipException('Backup member support is only available '
+                                     'in Octavia API version 2.1 or newer')
+        pool_id = self._listener_pool_create(
+            listener_protocol=const.HTTP, pool_protocol=const.HTTP,
+            algorithm=const.LB_ALGORITHM_LEAST_CONNECTIONS)
+        self._test_member_show(pool_id, backup_member=True)
 
     @decorators.idempotent_id('2674b363-7922-494a-b121-cf415dbbb716')
     def test_HTTP_LC_alt_monitor_member_show(self):
@@ -1719,7 +1798,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             algorithm=const.LB_ALGORITHM_SOURCE_IP_PORT)
         self._test_member_show(pool_id)
 
-    def _test_member_show(self, pool_id, alternate_monitor=False):
+    def _test_member_show(self, pool_id, alternate_monitor=False,
+                          backup_member=False):
         """Tests member show API.
 
         * Create a fully populated member.
@@ -1743,13 +1823,18 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
         if self.mem_member_client.is_version_supported(
                 self.api_version, '2.1'):
             member_kwargs.update({
-                const.BACKUP: False,
+                const.BACKUP: backup_member,
             })
         if self.lb_member_vip_subnet:
             member_kwargs[const.SUBNET_ID] = self.lb_member_vip_subnet[
                 const.ID]
 
         member = self.mem_member_client.create_member(**member_kwargs)
+
+        self.addCleanup(
+            self.mem_member_client.cleanup_member,
+            member[const.ID], pool_id=pool_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
 
         waiters.wait_for_status(
             self.mem_lb_client.show_loadbalancer, self.lb_id,
@@ -1794,8 +1879,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_system_reader',
-                                'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_system_reader', 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_system_reader',
                                 'os_roles_lb_admin',
@@ -1806,6 +1891,17 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
                 'MemberClient', 'show_member',
                 expected_allowed, member[const.ID],
                 pool_id=pool_id)
+
+    @decorators.idempotent_id('592c19c3-1e0d-4d6d-b2ff-0d39d8654c99')
+    def test_HTTP_LC_backup_member_update(self):
+        if not self.mem_member_client.is_version_supported(
+                self.api_version, '2.1'):
+            raise self.skipException('Backup member support is only available '
+                                     'in Octavia API version 2.1 or newer')
+        pool_id = self._listener_pool_create(
+            listener_protocol=const.HTTP, pool_protocol=const.HTTP,
+            algorithm=const.LB_ALGORITHM_LEAST_CONNECTIONS)
+        self._test_member_update(pool_id, backup_member=True)
 
     @decorators.idempotent_id('65680d48-1d49-4959-a7d1-677797e54f6b')
     def test_HTTP_LC_alt_monitor_member_update(self):
@@ -2151,7 +2247,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             algorithm=const.LB_ALGORITHM_SOURCE_IP_PORT)
         self._test_member_update(pool_id)
 
-    def _test_member_update(self, pool_id, alternate_monitor=False):
+    def _test_member_update(self, pool_id, alternate_monitor=False,
+                            backup_member=False):
         """Tests member show API and field filtering.
 
         * Create a fully populated member.
@@ -2178,7 +2275,7 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
         if self.mem_member_client.is_version_supported(
                 self.api_version, '2.1'):
             member_kwargs.update({
-                const.BACKUP: False,
+                const.BACKUP: backup_member,
             })
 
         if self.mem_member_client.is_version_supported(
@@ -2193,6 +2290,11 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
                 const.ID]
 
         member = self.mem_member_client.create_member(**member_kwargs)
+
+        self.addCleanup(
+            self.mem_member_client.cleanup_member,
+            member[const.ID], pool_id=pool_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
 
         waiters.wait_for_status(
             self.mem_lb_client.show_loadbalancer, self.lb_id,
@@ -2251,7 +2353,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
@@ -2636,6 +2739,11 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
                 const.ID]
         member1 = self.mem_member_client.create_member(**member1_kwargs)
 
+        self.addCleanup(
+            self.mem_member_client.cleanup_member,
+            member1[const.ID], pool_id=pool_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
+
         waiters.wait_for_status(self.mem_lb_client.show_loadbalancer,
                                 self.lb_id,
                                 const.PROVISIONING_STATUS,
@@ -2667,6 +2775,11 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
                 const.ID]
 
         member2 = self.mem_member_client.create_member(**member2_kwargs)
+
+        self.addCleanup(
+            self.mem_member_client.cleanup_member,
+            member2[const.ID], pool_id=pool_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
 
         waiters.wait_for_status(self.mem_lb_client.show_loadbalancer,
                                 self.lb_id,
@@ -2709,7 +2822,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
@@ -2750,6 +2864,17 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
         # Member2's name should be updated, and member3 should exist
         self.assertEqual(member2_name_update, members[0][const.NAME])
         self.assertEqual(member3_name, members[1][const.NAME])
+
+    @decorators.idempotent_id('eab8f0dc-0959-4b50-aea2-2f2319305d15')
+    def test_HTTP_LC_backup_member_delete(self):
+        if not self.mem_member_client.is_version_supported(
+                self.api_version, '2.1'):
+            raise self.skipException('Backup member support is only available '
+                                     'in Octavia API version 2.1 or newer')
+        pool_id = self._listener_pool_create(
+            listener_protocol=const.HTTP, pool_protocol=const.HTTP,
+            algorithm=const.LB_ALGORITHM_LEAST_CONNECTIONS)
+        self._test_member_delete(pool_id, backup_member=True)
 
     @decorators.idempotent_id('8b6574a3-17e8-4950-b24e-66d0c28960d3')
     def test_HTTP_LC_member_delete(self):
@@ -2923,7 +3048,7 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             algorithm=const.LB_ALGORITHM_SOURCE_IP_PORT)
         self._test_member_delete(pool_id)
 
-    def _test_member_delete(self, pool_id):
+    def _test_member_delete(self, pool_id, backup_member=False):
         """Tests member create and delete APIs.
 
         * Creates a member.
@@ -2938,7 +3063,19 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             const.ADDRESS: '192.0.2.1',
             const.PROTOCOL_PORT: self.member_port.increment(),
         }
+
+        if self.mem_member_client.is_version_supported(
+                self.api_version, '2.1'):
+            member_kwargs.update({
+                const.BACKUP: backup_member,
+            })
+
         member = self.mem_member_client.create_member(**member_kwargs)
+
+        self.addCleanup(
+            self.mem_member_client.cleanup_member,
+            member[const.ID], pool_id=pool_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
 
         waiters.wait_for_status(
             self.mem_lb_client.show_loadbalancer,
@@ -2954,7 +3091,8 @@ class MemberAPITest(test_base.LoadBalancerBaseTest):
             expected_allowed = ['os_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.KEYSTONE_DEFAULT_ROLES:
-            expected_allowed = ['os_system_admin', 'os_roles_lb_member']
+            expected_allowed = ['os_admin', 'os_roles_lb_admin',
+                                'os_roles_lb_member']
         if CONF.load_balancer.RBAC_test_type == const.ADVANCED:
             expected_allowed = ['os_system_admin', 'os_roles_lb_admin',
                                 'os_roles_lb_member']

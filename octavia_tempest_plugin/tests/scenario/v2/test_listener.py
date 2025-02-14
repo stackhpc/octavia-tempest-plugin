@@ -76,6 +76,11 @@ class ListenerScenarioTest(test_base.LoadBalancerBaseTest):
         pool1 = cls.mem_pool_client.create_pool(**pool1_kwargs)
         pool1_id = pool1[const.ID]
 
+        cls.addClassResourceCleanup(
+            cls.mem_pool_client.cleanup_pool,
+            pool1_id,
+            lb_client=cls.mem_lb_client, lb_id=cls.lb_id)
+
         waiters.wait_for_status(cls.mem_lb_client.show_loadbalancer,
                                 cls.lb_id, const.PROVISIONING_STATUS,
                                 const.ACTIVE,
@@ -91,6 +96,11 @@ class ListenerScenarioTest(test_base.LoadBalancerBaseTest):
         }
         pool2 = cls.mem_pool_client.create_pool(**pool2_kwargs)
         pool2_id = pool2[const.ID]
+
+        cls.addClassResourceCleanup(
+            cls.mem_pool_client.cleanup_pool,
+            pool2_id,
+            lb_client=cls.mem_lb_client, lb_id=cls.lb_id)
 
         waiters.wait_for_status(cls.mem_lb_client.show_loadbalancer,
                                 cls.lb_id, const.PROVISIONING_STATUS,
@@ -115,11 +125,6 @@ class ListenerScenarioTest(test_base.LoadBalancerBaseTest):
         self._test_listener_CRUD(const.TCP, pool1, pool2)
 
     @decorators.idempotent_id('27a2ba7d-6147-46e4-886a-47c1ba63bf89')
-    # Skipping due to a status update bug in the amphora driver.
-    @decorators.skip_because(
-        bug='2007979',
-        bug_type='storyboard',
-        condition=CONF.load_balancer.provider in const.AMPHORA_PROVIDERS)
     def test_udp_least_connections_listener_CRUD(self):
         pool1, pool2 = self._create_pools(const.UDP,
                                           const.LB_ALGORITHM_LEAST_CONNECTIONS)
@@ -138,11 +143,6 @@ class ListenerScenarioTest(test_base.LoadBalancerBaseTest):
         self._test_listener_CRUD(const.TCP, pool1, pool2)
 
     @decorators.idempotent_id('dd913f74-c6a6-4998-9bed-095babb9cb47')
-    # Skipping due to a status update bug in the amphora driver.
-    @decorators.skip_because(
-        bug='2007979',
-        bug_type='storyboard',
-        condition=CONF.load_balancer.provider in const.AMPHORA_PROVIDERS)
     def test_udp_round_robin_listener_CRUD(self):
         pool1, pool2 = self._create_pools(const.UDP,
                                           const.LB_ALGORITHM_ROUND_ROBIN)
@@ -161,11 +161,6 @@ class ListenerScenarioTest(test_base.LoadBalancerBaseTest):
         self._test_listener_CRUD(const.TCP, pool1, pool2)
 
     @decorators.idempotent_id('7830aba8-12ca-40d9-9d9b-a63f7a43b287')
-    # Skipping due to a status update bug in the amphora driver.
-    @decorators.skip_because(
-        bug='2007979',
-        bug_type='storyboard',
-        condition=CONF.load_balancer.provider in const.AMPHORA_PROVIDERS)
     def test_udp_source_ip_listener_CRUD(self):
         pool1, pool2 = self._create_pools(const.UDP,
                                           const.LB_ALGORITHM_SOURCE_IP)
@@ -200,11 +195,6 @@ class ListenerScenarioTest(test_base.LoadBalancerBaseTest):
             raise testtools.TestCase.skipException(message)
 
     @decorators.idempotent_id('3f9a2de9-5012-437d-a907-a25e1f68ccfb')
-    # Skipping due to a status update bug in the amphora driver.
-    @decorators.skip_because(
-        bug='2007979',
-        bug_type='storyboard',
-        condition=CONF.load_balancer.provider in const.AMPHORA_PROVIDERS)
     def test_udp_source_ip_port_listener_CRUD(self):
         try:
             pool1, pool2 = self._create_pools(

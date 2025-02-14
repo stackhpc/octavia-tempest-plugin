@@ -45,6 +45,7 @@ PROVIDER = 'provider'
 PROVIDER_NAME = 'provider_name'
 PROVISIONING_STATUS = 'provisioning_status'
 REQUEST_ERRORS = 'request_errors'
+TLS_CONTAINER_REF = 'tls_container_ref'
 TOTAL_CONNECTIONS = 'total_connections'
 UPDATED_AT = 'updated_at'
 VIP_ADDRESS = 'vip_address'
@@ -71,6 +72,9 @@ SNI_CONTAINER_REFS = 'sni_container_refs'
 DEFAULT_POOL_ID = 'default_pool_id'
 L7_POLICIES = 'l7_policies'
 ALPN_PROTOCOLS = 'alpn_protocols'
+HSTS_MAX_AGE = 'hsts_max_age'
+HSTS_INCLUDE_SUBDOMAINS = 'hsts_include_subdomains'
+HSTS_PRELOAD = 'hsts_preload'
 
 LB_ALGORITHM = 'lb_algorithm'
 LB_ALGORITHM_ROUND_ROBIN = 'ROUND_ROBIN'
@@ -111,6 +115,7 @@ ENABLED = 'enabled'
 
 # Other constants
 ACTIVE = 'ACTIVE'
+PAUSED = 'PAUSED'
 PENDING_UPDATE = 'PENDING_UPDATE'
 ADMIN_STATE_UP_TRUE = 'true'
 ASC = 'asc'
@@ -125,11 +130,14 @@ SORT = 'sort'
 SINGLE = 'SINGLE'
 ACTIVE_STANDBY = 'ACTIVE_STANDBY'
 SUPPORTED_LB_TOPOLOGIES = (SINGLE, ACTIVE_STANDBY)
+BACKUP_TRUE = 'true'
 
 # Protocols
 HTTP = 'HTTP'
 HTTPS = 'HTTPS'
 PROXY = 'PROXY'
+PROMETHEUS = 'PROMETHEUS'
+SCTP = 'SCTP'
 TCP = 'TCP'
 TERMINATED_HTTPS = 'TERMINATED_HTTPS'
 UDP = 'UDP'
@@ -139,12 +147,18 @@ GET = 'GET'
 POST = 'POST'
 PUT = 'PUT'
 DELETE = 'DELETE'
+HEAD = 'HEAD'
+OPTIONS = 'OPTIONS'
+PATCH = 'PATCH'
+CONNECT = 'CONNECT'
+TRACE = 'TRACE'
 
 # HM Types
 HEALTH_MONITOR_PING = 'PING'
 HEALTH_MONITOR_TCP = 'TCP'
 HEALTH_MONITOR_HTTP = 'HTTP'
 HEALTH_MONITOR_HTTPS = 'HTTPS'
+HEALTH_MONITOR_SCTP = 'SCTP'
 HEALTH_MONITOR_TLS_HELLO = 'TLS-HELLO'
 HEALTH_MONITOR_UDP_CONNECT = 'UDP-CONNECT'
 
@@ -231,10 +245,16 @@ AMPHORA_PROVIDERS = ['amphora', 'amphorav2', 'octavia']
 
 # Flavor capabilities
 LOADBALANCER_TOPOLOGY = 'loadbalancer_topology'
+COMPUTE_FLAVOR = 'compute_flavor'
 
 # Availability zone capabilities
 COMPUTE_ZONE = 'compute_zone'
 MANAGEMENT_NETWORK = 'management_network'
+
+# Compute flavors
+RAM = 'ram'
+VCPUS = 'vcpus'
+DISK = 'disk'
 
 # API valid fields
 SHOW_LOAD_BALANCER_RESPONSE_FIELDS = (

@@ -28,6 +28,7 @@ from oslo_utils import uuidutils
 from tempest import config
 from tempest.lib.common.utils import data_utils
 from tempest.lib import decorators
+import testtools
 
 from octavia_tempest_plugin.common import barbican_client_mgr
 from octavia_tempest_plugin.common import cert_utils
@@ -219,7 +220,7 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
                 floating_network_id=CONF.network.public_network_id,
                 port_id=port_id)
             floating_ip = result['floatingip']
-            LOG.info('lb1_floating_ip: {}'.format(floating_ip))
+            LOG.info('lb1_floating_ip: %s', floating_ip)
             cls.addClassResourceCleanup(
                 waiters.wait_for_not_found,
                 cls.lb_mem_float_ip_client.delete_floatingip,
@@ -239,6 +240,11 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
         pool = cls.mem_pool_client.create_pool(**pool_kwargs)
         cls.pool_id = pool[const.ID]
 
+        cls.addClassResourceCleanup(
+            cls.mem_pool_client.cleanup_pool,
+            cls.pool_id,
+            lb_client=cls.mem_lb_client, lb_id=cls.lb_id)
+
         waiters.wait_for_status(cls.mem_lb_client.show_loadbalancer,
                                 cls.lb_id, const.PROVISIONING_STATUS,
                                 const.ACTIVE,
@@ -257,7 +263,13 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
         if cls.lb_member_1_subnet:
             member1_kwargs[const.SUBNET_ID] = cls.lb_member_1_subnet[const.ID]
 
-        cls.mem_member_client.create_member(**member1_kwargs)
+        member1 = cls.mem_member_client.create_member(**member1_kwargs)
+
+        cls.addClassResourceCleanup(
+            cls.mem_member_client.cleanup_member,
+            member1[const.ID], cls.pool_id,
+            lb_client=cls.mem_lb_client, lb_id=cls.lb_id)
+
         waiters.wait_for_status(
             cls.mem_lb_client.show_loadbalancer, cls.lb_id,
             const.PROVISIONING_STATUS, const.ACTIVE,
@@ -276,7 +288,13 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
         if cls.lb_member_2_subnet:
             member2_kwargs[const.SUBNET_ID] = cls.lb_member_2_subnet[const.ID]
 
-        cls.mem_member_client.create_member(**member2_kwargs)
+        member2 = cls.mem_member_client.create_member(**member2_kwargs)
+
+        cls.addClassResourceCleanup(
+            cls.mem_member_client.cleanup_member,
+            member2[const.ID], cls.pool_id,
+            lb_client=cls.mem_lb_client, lb_id=cls.lb_id)
+
         waiters.wait_for_status(
             cls.mem_lb_client.show_loadbalancer, cls.lb_id,
             const.PROVISIONING_STATUS, const.ACTIVE,
@@ -331,13 +349,16 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
                 # Make sure the certificate is the one we generated
                 self.assertEqual(expected_cn, received_cn, message=msg)
             else:
-                LOG.error('Certificate with CN: {0} failed validation with '
-                          'OpenSSL verify errno {1}'.format(
-                              x509.get_subject().commonName, errno))
+                LOG.error('Certificate with CN: %s failed validation with '
+                          'OpenSSL verify errno %s',
+                          x509.get_subject().commonName, errno)
                 return False
             return True
 
-        context = SSL.Context(SSL.SSLv23_METHOD)
+        try:
+            context = SSL.Context(SSL.TLS_METHOD)
+        except AttributeError:
+            context = SSL.Context(SSL.SSLv23_METHOD)
         context.set_verify(SSL.VERIFY_PEER | SSL.VERIFY_FAIL_IF_NO_PEER_CERT,
                            _verify_cb)
         ca_store = context.get_cert_store()
@@ -466,14 +487,17 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
                 # Make sure the certificate is the one we generated
                 self.assertEqual(expected_cn, received_cn, message=msg)
             else:
-                LOG.error('Certificate with CN: {0} failed validation with '
-                          'OpenSSL verify errno {1}'.format(
-                              x509.get_subject().commonName, errno))
+                LOG.error('Certificate with CN: %s failed validation with '
+                          'OpenSSL verify errno %s',
+                          x509.get_subject().commonName, errno)
                 return False
             return True
 
         # Test that the default certificate is used with no SNI host request
-        context = SSL.Context(SSL.SSLv23_METHOD)
+        try:
+            context = SSL.Context(SSL.TLS_METHOD)
+        except AttributeError:
+            context = SSL.Context(SSL.SSLv23_METHOD)
         context.set_verify(SSL.VERIFY_PEER | SSL.VERIFY_FAIL_IF_NO_PEER_CERT,
                            _verify_server_cb)
         ca_store = context.get_cert_store()
@@ -485,7 +509,10 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
         sock.do_handshake()
 
         # Test that the default certificate is used with bogus SNI host request
-        context = SSL.Context(SSL.TLSv1_2_METHOD)
+        try:
+            context = SSL.Context(SSL.TLS_METHOD)
+        except AttributeError:
+            context = SSL.Context(SSL.TLSv1_2_METHOD)
         context.set_verify(SSL.VERIFY_PEER | SSL.VERIFY_FAIL_IF_NO_PEER_CERT,
                            _verify_server_cb)
         ca_store = context.get_cert_store()
@@ -498,7 +525,10 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
         sock.do_handshake()
 
         # Test that the SNI1 certificate is used when SNI1 host is specified
-        context = SSL.Context(SSL.TLSv1_2_METHOD)
+        try:
+            context = SSL.Context(SSL.TLS_METHOD)
+        except AttributeError:
+            context = SSL.Context(SSL.TLSv1_2_METHOD)
         context.set_verify(SSL.VERIFY_PEER | SSL.VERIFY_FAIL_IF_NO_PEER_CERT,
                            _verify_SNI1_cb)
         ca_store = context.get_cert_store()
@@ -512,7 +542,10 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
         sock.do_handshake()
 
         # Test that the SNI2 certificate is used when SNI2 host is specified
-        context = SSL.Context(SSL.SSLv23_METHOD)
+        try:
+            context = SSL.Context(SSL.TLS_METHOD)
+        except AttributeError:
+            context = SSL.Context(SSL.SSLv23_METHOD)
         context.set_verify(SSL.VERIFY_PEER | SSL.VERIFY_FAIL_IF_NO_PEER_CERT,
                            _verify_SNI2_cb)
         ca_store = context.get_cert_store()
@@ -627,14 +660,17 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
                 # Make sure the certificate is the one we generated
                 self.assertEqual(expected_cn, received_cn, message=msg)
             else:
-                LOG.error('Certificate with CN: {0} failed validation with '
-                          'OpenSSL verify errno {1}'.format(
-                              x509.get_subject().commonName, errno))
+                LOG.error('Certificate with CN: %s failed validation with '
+                          'OpenSSL verify errno %s',
+                          x509.get_subject().commonName, errno)
                 return False
             return True
 
         # Test that the default certificate is used with no SNI host request
-        context = SSL.Context(SSL.SSLv23_METHOD)
+        try:
+            context = SSL.Context(SSL.TLS_METHOD)
+        except AttributeError:
+            context = SSL.Context(SSL.SSLv23_METHOD)
         context.set_verify(SSL.VERIFY_PEER | SSL.VERIFY_FAIL_IF_NO_PEER_CERT,
                            _verify_server_cb)
         ca_store = context.get_cert_store()
@@ -646,7 +682,10 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
         sock.do_handshake()
 
         # Test that the SNI1 certificate is used when SNI1 host is specified
-        context = SSL.Context(SSL.TLSv1_2_METHOD)
+        try:
+            context = SSL.Context(SSL.TLS_METHOD)
+        except AttributeError:
+            context = SSL.Context(SSL.TLSv1_2_METHOD)
         context.set_verify(SSL.VERIFY_PEER | SSL.VERIFY_FAIL_IF_NO_PEER_CERT,
                            _verify_SNI1_cb)
         ca_store = context.get_cert_store()
@@ -660,7 +699,10 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
         sock.do_handshake()
 
         # Test that the default certificate is used when SNI2 host is specified
-        context = SSL.Context(SSL.SSLv23_METHOD)
+        try:
+            context = SSL.Context(SSL.TLS_METHOD)
+        except AttributeError:
+            context = SSL.Context(SSL.SSLv23_METHOD)
         context.set_verify(SSL.VERIFY_PEER | SSL.VERIFY_FAIL_IF_NO_PEER_CERT,
                            _verify_server_cb)
         ca_store = context.get_cert_store()
@@ -675,7 +717,10 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
 
         # Test that the SNI2 certificate is used with no SNI host request
         # on listener 2, SNI2 is the default cert for listener 2
-        context = SSL.Context(SSL.SSLv23_METHOD)
+        try:
+            context = SSL.Context(SSL.TLS_METHOD)
+        except AttributeError:
+            context = SSL.Context(SSL.SSLv23_METHOD)
         context.set_verify(SSL.VERIFY_PEER | SSL.VERIFY_FAIL_IF_NO_PEER_CERT,
                            _verify_SNI2_cb)
         ca_store = context.get_cert_store()
@@ -688,7 +733,10 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
 
         # Test that the SNI2 certificate is used with listener 1 host request
         # on listener 2, SNI2 is the default cert for listener 2
-        context = SSL.Context(SSL.SSLv23_METHOD)
+        try:
+            context = SSL.Context(SSL.TLS_METHOD)
+        except AttributeError:
+            context = SSL.Context(SSL.SSLv23_METHOD)
         context.set_verify(SSL.VERIFY_PEER | SSL.VERIFY_FAIL_IF_NO_PEER_CERT,
                            _verify_SNI2_cb)
         ca_store = context.get_cert_store()
@@ -703,7 +751,10 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
 
         # Test that the SNI2 certificate is used with SNI1 host request
         # on listener 2, SNI2 is the default cert for listener 2
-        context = SSL.Context(SSL.SSLv23_METHOD)
+        try:
+            context = SSL.Context(SSL.TLS_METHOD)
+        except AttributeError:
+            context = SSL.Context(SSL.SSLv23_METHOD)
         context.set_verify(SSL.VERIFY_PEER | SSL.VERIFY_FAIL_IF_NO_PEER_CERT,
                            _verify_SNI2_cb)
         ca_store = context.get_cert_store()
@@ -1171,7 +1222,8 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
 
         self.assertEqual(expected_proto, selected_proto)
 
-    def _test_http_versions_tls_traffic(self, http_version, alpn_protos):
+    def _test_http_versions_tls_traffic(self, http_version, alpn_protos,
+                                        hsts: bool = False):
         if not self.mem_listener_client.is_version_supported(
                 self.api_version, '2.20'):
             raise self.skipException('ALPN protocols are only available on '
@@ -1186,6 +1238,12 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
             const.DEFAULT_TLS_CONTAINER_REF: self.server_secret_ref,
             const.ALPN_PROTOCOLS: alpn_protos,
         }
+        if self.mem_listener_client.is_version_supported(
+                self.api_version, '2.27'):
+            listener_kwargs[const.HSTS_MAX_AGE] = 100 if hsts else None
+            listener_kwargs[const.HSTS_INCLUDE_SUBDOMAINS] = hsts
+            listener_kwargs[const.HSTS_PRELOAD] = hsts
+
         listener = self.mem_listener_client.create_listener(**listener_kwargs)
         self.listener_id = listener[const.ID]
         self.addCleanup(
@@ -1198,15 +1256,26 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
                                 const.ACTIVE,
                                 CONF.load_balancer.build_interval,
                                 CONF.load_balancer.build_timeout)
-
         context = ssl.create_default_context(cadata=self.ca_cert.public_bytes(
             serialization.Encoding.PEM).decode('utf-8'))
         context.check_hostname = False
 
         url = 'https://%s:%s' % (self.lb_vip_address, 443)
-        client = httpx.Client(http2=(http_version == 'HTTP/2'), verify=context)
+        client_kwargs = {
+            'verify': context
+        }
+        if http_version == 'HTTP/2':
+            client_kwargs['http1'] = False
+            client_kwargs['http2'] = True
+        client = httpx.Client(**client_kwargs)
         r = client.get(url)
         self.assertEqual(http_version, r.http_version)
+        if hsts:
+            self.assertIn('strict-transport-security', r.headers)
+            self.assertEqual('max-age=100; includeSubDomains; preload;',
+                             r.headers['strict-transport-security'])
+        else:
+            self.assertNotIn('strict-transport-security', r.headers)
 
     @decorators.idempotent_id('9965828d-24af-4fa0-91ae-21c6bc47ab4c')
     def test_http_2_tls_traffic(self):
@@ -1216,6 +1285,15 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
     def test_http_1_1_tls_traffic(self):
         self._test_http_versions_tls_traffic(
             'HTTP/1.1', ['http/1.1', 'http/1.0'])
+
+    @decorators.idempotent_id('7436c6b7-44be-4544-a40b-31d2b7b2ad0b')
+    def test_http_1_1_tls_hsts_traffic(self):
+        if not self.mem_listener_client.is_version_supported(
+                self.api_version, '2.27'):
+            raise self.skipException('HSTS is only available on '
+                                     'Octavia API version 2.27 or newer.')
+        self._test_http_versions_tls_traffic(
+            'HTTP/1.1', ['http/1.1', 'http/1.0'], hsts=True)
 
     @decorators.idempotent_id('ee0faf71-d11e-4323-8673-e5e15779749b')
     def test_pool_reencryption(self):
@@ -1233,6 +1311,11 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
         }
         pool = self.mem_pool_client.create_pool(**pool_kwargs)
         pool_id = pool[const.ID]
+
+        self.addClassResourceCleanup(
+            self.mem_pool_client.cleanup_pool,
+            pool_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
 
         waiters.wait_for_status(self.mem_lb_client.show_loadbalancer,
                                 self.lb_id, const.PROVISIONING_STATUS,
@@ -1252,7 +1335,13 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
         if self.lb_member_1_subnet:
             member1_kwargs[const.SUBNET_ID] = self.lb_member_1_subnet[const.ID]
 
-        self.mem_member_client.create_member(**member1_kwargs)
+        member1 = self.mem_member_client.create_member(**member1_kwargs)
+
+        self.addClassResourceCleanup(
+            self.mem_member_client.cleanup_member,
+            member1[const.ID], pool_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
+
         waiters.wait_for_status(
             self.mem_lb_client.show_loadbalancer, self.lb_id,
             const.PROVISIONING_STATUS, const.ACTIVE,
@@ -1271,7 +1360,13 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
         if self.lb_member_2_subnet:
             member2_kwargs[const.SUBNET_ID] = self.lb_member_2_subnet[const.ID]
 
-        self.mem_member_client.create_member(**member2_kwargs)
+        member2 = self.mem_member_client.create_member(**member2_kwargs)
+
+        self.addClassResourceCleanup(
+            self.mem_member_client.cleanup_member,
+            member2[const.ID], pool_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
+
         waiters.wait_for_status(
             self.mem_lb_client.show_loadbalancer, self.lb_id,
             const.PROVISIONING_STATUS, const.ACTIVE,
@@ -1289,6 +1384,11 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
         }
         listener = self.mem_listener_client.create_listener(**listener_kwargs)
         self.listener_id = listener[const.ID]
+
+        self.addCleanup(
+            self.mem_listener_client.cleanup_listener,
+            self.listener_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
 
         waiters.wait_for_status(self.mem_lb_client.show_loadbalancer,
                                 self.lb_id, const.PROVISIONING_STATUS,
@@ -1362,3 +1462,413 @@ class TLSWithBarbicanTest(test_base.LoadBalancerBaseTestWithCompute):
 
         self.check_members_balanced(self.lb_vip_address, protocol=const.HTTP,
                                     protocol_port=84, traffic_member_count=1)
+
+    @decorators.idempotent_id('11b67c96-a553-4b47-9fc6-4c3d7a2a10ce')
+    def test_pool_reencryption_client_authentication(self):
+        if not self.mem_listener_client.is_version_supported(
+                self.api_version, '2.8'):
+            raise self.skipException('Pool re-encryption is only available on '
+                                     'Octavia API version 2.8 or newer.')
+        pool_name = data_utils.rand_name("lb_member_pool1-tls-client-auth")
+        pool_kwargs = {
+            const.NAME: pool_name,
+            const.PROTOCOL: const.HTTP,
+            const.LB_ALGORITHM: self.lb_algorithm,
+            const.LOADBALANCER_ID: self.lb_id,
+            const.TLS_ENABLED: True
+        }
+        # Specify an http/1.x alpn to work around HTTP healthchecks
+        # on older haproxy versions when alpn includes h2
+        if self.mem_listener_client.is_version_supported(
+                self.api_version, '2.24'):
+            pool_kwargs[const.ALPN_PROTOCOLS] = ['http/1.0', 'http/1.1']
+
+        pool = self.mem_pool_client.create_pool(**pool_kwargs)
+        pool_id = pool[const.ID]
+
+        self.addClassResourceCleanup(
+            self.mem_pool_client.cleanup_pool,
+            pool_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
+
+        waiters.wait_for_status(self.mem_lb_client.show_loadbalancer,
+                                self.lb_id, const.PROVISIONING_STATUS,
+                                const.ACTIVE,
+                                CONF.load_balancer.build_interval,
+                                CONF.load_balancer.build_timeout)
+
+        hm_name = data_utils.rand_name("lb_member_hm1-tls-client-auth")
+        hm_kwargs = {
+            const.POOL_ID: pool_id,
+            const.NAME: hm_name,
+            const.TYPE: const.HEALTH_MONITOR_HTTPS,
+            const.HTTP_METHOD: const.GET,
+            const.URL_PATH: '/',
+            const.EXPECTED_CODES: '200',
+            const.DELAY: 1,
+            const.TIMEOUT: 1,
+            const.MAX_RETRIES: 1,
+            const.MAX_RETRIES_DOWN: 1,
+            const.ADMIN_STATE_UP: True,
+        }
+        hm = self.mem_healthmonitor_client.create_healthmonitor(**hm_kwargs)
+        self.addCleanup(
+            self.mem_healthmonitor_client.cleanup_healthmonitor,
+            hm[const.ID],
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
+
+        waiters.wait_for_status(
+            self.mem_lb_client.show_loadbalancer, self.lb_id,
+            const.PROVISIONING_STATUS, const.ACTIVE,
+            CONF.load_balancer.build_interval,
+            CONF.load_balancer.build_timeout)
+        hm = waiters.wait_for_status(
+            self.mem_healthmonitor_client.show_healthmonitor,
+            hm[const.ID], const.PROVISIONING_STATUS,
+            const.ACTIVE,
+            CONF.load_balancer.build_interval,
+            CONF.load_balancer.build_timeout)
+
+        # Set up Member 1 for Webserver 1
+        member1_name = data_utils.rand_name(
+            "lb_member_member1-tls-client-auth")
+        member1_kwargs = {
+            const.POOL_ID: pool_id,
+            const.NAME: member1_name,
+            const.ADMIN_STATE_UP: True,
+            const.ADDRESS: self.webserver1_ip,
+            const.PROTOCOL_PORT: 9443,
+        }
+        if self.lb_member_1_subnet:
+            member1_kwargs[const.SUBNET_ID] = self.lb_member_1_subnet[const.ID]
+
+        member1 = self.mem_member_client.create_member(**member1_kwargs)
+
+        self.addCleanup(
+            self.mem_member_client.cleanup_member,
+            member1[const.ID], pool_id=pool_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
+
+        waiters.wait_for_status(
+            self.mem_lb_client.show_loadbalancer, self.lb_id,
+            const.PROVISIONING_STATUS, const.ACTIVE,
+            CONF.load_balancer.check_interval,
+            CONF.load_balancer.check_timeout)
+
+        # Set up Member 2 for Webserver 2
+        member2_name = data_utils.rand_name(
+            "lb_member_member2-tls-client-auth")
+        member2_kwargs = {
+            const.POOL_ID: pool_id,
+            const.NAME: member2_name,
+            const.ADMIN_STATE_UP: True,
+            const.ADDRESS: self.webserver2_ip,
+            const.PROTOCOL_PORT: 9443,
+        }
+        if self.lb_member_2_subnet:
+            member2_kwargs[const.SUBNET_ID] = self.lb_member_2_subnet[const.ID]
+
+        member2 = self.mem_member_client.create_member(**member2_kwargs)
+
+        self.addCleanup(
+            self.mem_member_client.cleanup_member,
+            member2[const.ID], pool_id=pool_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
+
+        waiters.wait_for_status(
+            self.mem_lb_client.show_loadbalancer, self.lb_id,
+            const.PROVISIONING_STATUS, const.ACTIVE,
+            CONF.load_balancer.check_interval,
+            CONF.load_balancer.check_timeout)
+
+        listener_name = data_utils.rand_name(
+            "lb_member_listener1-tls-client-auth")
+        listener_kwargs = {
+            const.NAME: listener_name,
+            const.PROTOCOL: const.HTTP,
+            const.PROTOCOL_PORT: '85',
+            const.LOADBALANCER_ID: self.lb_id,
+            const.DEFAULT_POOL_ID: pool_id,
+        }
+        listener = self.mem_listener_client.create_listener(**listener_kwargs)
+        self.listener_id = listener[const.ID]
+
+        self.addCleanup(
+            self.mem_listener_client.cleanup_listener,
+            self.listener_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
+
+        waiters.wait_for_status(self.mem_lb_client.show_loadbalancer,
+                                self.lb_id, const.PROVISIONING_STATUS,
+                                const.ACTIVE,
+                                CONF.load_balancer.build_interval,
+                                CONF.load_balancer.build_timeout)
+
+        # Test that there are no members without a client certificate
+        url = 'http://{0}:85'.format(self.lb_vip_address)
+        self.validate_URL_response(url, expected_status_code=503)
+
+        # Test with client certificates
+        pool_update_kwargs = {
+            const.TLS_CONTAINER_REF: self.pool_client_ref
+        }
+
+        self.mem_pool_client.update_pool(pool_id, **pool_update_kwargs)
+
+        waiters.wait_for_status(
+            self.mem_lb_client.show_loadbalancer, self.lb_id,
+            const.PROVISIONING_STATUS, const.ACTIVE,
+            CONF.load_balancer.check_interval,
+            CONF.load_balancer.check_timeout)
+        waiters.wait_for_status(
+            self.mem_pool_client.show_pool, pool_id,
+            const.PROVISIONING_STATUS, const.ACTIVE,
+            CONF.load_balancer.check_interval,
+            CONF.load_balancer.check_timeout)
+
+        # Make sure the health monitor has brought the members up after the
+        # the pool update.
+        waiters.wait_for_status(
+            self.mem_member_client.show_member, member1[const.ID],
+            const.OPERATING_STATUS, const.ONLINE,
+            CONF.load_balancer.check_interval,
+            CONF.load_balancer.check_timeout, error_ok=True, pool_id=pool_id)
+        waiters.wait_for_status(
+            self.mem_member_client.show_member, member2[const.ID],
+            const.OPERATING_STATUS, const.ONLINE,
+            CONF.load_balancer.check_interval,
+            CONF.load_balancer.check_timeout, error_ok=True, pool_id=pool_id)
+
+        self.check_members_balanced(self.lb_vip_address, protocol=const.HTTP,
+                                    protocol_port=85)
+
+    @decorators.idempotent_id('d3e4c5fe-1726-49e4-b0b0-7a5a47749fc9')
+    def test_basic_h2_listener_http_listener_pool_reencryption(self):
+        """Test both h2 and HTTP traffic on the same load balancer.
+
+        In this test we deploy the following Octavia resources:
+            HTTPS_TERMINATED listener with h2 alpn protocols
+            HTTP listener
+            HTTP pool with both h2 alpn protocols and backend re-encryption
+
+        we send both h2 and http traffic from a client to the load balancer vip
+        and we make sure h2 traffic was negotiated when it was sent on 443 port
+        :raises self.skipException: ALPN support for pools not available prior
+        to v2.24.
+        """
+        if not self.mem_listener_client.is_version_supported(
+                self.api_version, '2.24'):
+            raise self.skipException('ALPN protocols are only available on '
+                                     'pools in Octavia API version 2.24 or'
+                                     ' newer.')
+        pool_name = data_utils.rand_name("lb_member_pool1-tls-alpn")
+        pool_kwargs = {
+            const.NAME: pool_name,
+            const.PROTOCOL: const.HTTP,
+            const.LB_ALGORITHM: self.lb_algorithm,
+            const.LOADBALANCER_ID: self.lb_id,
+            const.TLS_ENABLED: True,
+            const.ALPN_PROTOCOLS: ['h2', 'http/1.1'],
+        }
+
+        pool = self.mem_pool_client.create_pool(**pool_kwargs)
+        pool_id = pool[const.ID]
+
+        self.addCleanup(
+            self.mem_pool_client.cleanup_pool,
+            pool_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
+
+        waiters.wait_for_status(self.mem_lb_client.show_loadbalancer,
+                                self.lb_id, const.PROVISIONING_STATUS,
+                                const.ACTIVE,
+                                CONF.load_balancer.build_interval,
+                                CONF.load_balancer.build_timeout)
+
+        # Set up Member 1 for Webserver 1
+        member1_name = data_utils.rand_name("lb_member_member1-tls-reencrypt")
+        member1_kwargs = {
+            const.POOL_ID: pool_id,
+            const.NAME: member1_name,
+            const.ADMIN_STATE_UP: True,
+            const.ADDRESS: self.webserver1_ip,
+            const.PROTOCOL_PORT: 443,
+        }
+        if self.lb_member_1_subnet:
+            member1_kwargs[const.SUBNET_ID] = self.lb_member_1_subnet[const.ID]
+
+        member1 = self.mem_member_client.create_member(**member1_kwargs)
+
+        self.addCleanup(
+            self.mem_member_client.cleanup_member,
+            member1[const.ID], pool_id=pool_id,
+            lb_client=self.mem_lb_client,
+            lb_id=self.lb_id)
+
+        waiters.wait_for_status(
+            self.mem_lb_client.show_loadbalancer, self.lb_id,
+            const.PROVISIONING_STATUS, const.ACTIVE,
+            CONF.load_balancer.check_interval,
+            CONF.load_balancer.check_timeout)
+
+        # Set up Member 2 for Webserver 2
+        member2_name = data_utils.rand_name("lb_member_member2-tls-reencrypt")
+        member2_kwargs = {
+            const.POOL_ID: pool_id,
+            const.NAME: member2_name,
+            const.ADMIN_STATE_UP: True,
+            const.ADDRESS: self.webserver2_ip,
+            const.PROTOCOL_PORT: 443,
+        }
+        if self.lb_member_2_subnet:
+            member2_kwargs[const.SUBNET_ID] = self.lb_member_2_subnet[const.ID]
+
+        member2 = self.mem_member_client.create_member(**member2_kwargs)
+
+        self.addCleanup(
+            self.mem_member_client.cleanup_member,
+            member2[const.ID], pool_id=pool_id,
+            lb_client=self.mem_lb_client,
+            lb_id=self.lb_id)
+
+        waiters.wait_for_status(
+            self.mem_lb_client.show_loadbalancer, self.lb_id,
+            const.PROVISIONING_STATUS, const.ACTIVE,
+            CONF.load_balancer.check_interval,
+            CONF.load_balancer.check_timeout)
+
+        listener_name = data_utils.rand_name(
+            "lb_member_listener1-tls-terminated-alpn")
+        listener_kwargs = {
+            const.NAME: listener_name,
+            const.PROTOCOL: const.TERMINATED_HTTPS,
+            const.PROTOCOL_PORT: '443',
+            const.LOADBALANCER_ID: self.lb_id,
+            const.DEFAULT_POOL_ID: pool_id,
+            const.DEFAULT_TLS_CONTAINER_REF: self.server_secret_ref,
+            const.ALPN_PROTOCOLS: ['h2', 'http/1.1']
+        }
+        listener = self.mem_listener_client.create_listener(**listener_kwargs)
+
+        self.addCleanup(
+            self.mem_listener_client.cleanup_listener,
+            listener[const.ID],
+            lb_client=self.mem_lb_client,
+            lb_id=self.lb_id)
+
+        waiters.wait_for_status(self.mem_lb_client.show_loadbalancer,
+                                self.lb_id, const.PROVISIONING_STATUS,
+                                const.ACTIVE,
+                                CONF.load_balancer.build_interval,
+                                CONF.load_balancer.build_timeout)
+
+        listener_name = data_utils.rand_name(
+            "lb_member_listener1-http")
+        listener_kwargs = {
+            const.NAME: listener_name,
+            const.PROTOCOL: const.HTTP,
+            const.PROTOCOL_PORT: 80,
+            const.LOADBALANCER_ID: self.lb_id,
+            const.DEFAULT_POOL_ID: pool_id,
+        }
+        listener = self.mem_listener_client.create_listener(**listener_kwargs)
+        self.listener_id = listener[const.ID]
+        self.addCleanup(
+            self.mem_listener_client.cleanup_listener,
+            self.listener_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
+
+        waiters.wait_for_status(self.mem_lb_client.show_loadbalancer,
+                                self.lb_id, const.PROVISIONING_STATUS,
+                                const.ACTIVE,
+                                CONF.load_balancer.build_interval,
+                                CONF.load_balancer.build_timeout)
+
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS)
+        context.set_alpn_protocols(['h2', 'http/1.1'])
+        s = socket.socket()
+        ssl_sock = context.wrap_socket(s)
+        ssl_sock.connect((self.lb_vip_address, 443))
+        selected_proto = ssl_sock.selected_alpn_protocol()
+        self.assertEqual('h2', selected_proto)
+
+        # Test HTTPS listener load balancing.
+        self.check_members_balanced(self.lb_vip_address, protocol=const.HTTPS,
+                                    HTTPS_verify=False, protocol_port=443)
+
+        # Test HTTP listener load balancing.
+        self.check_members_balanced(self.lb_vip_address)
+
+    @decorators.idempotent_id('7d9dcae6-3e2c-4eae-9bfb-1ef0d00aa530')
+    @testtools.skipUnless(
+        CONF.loadbalancer_feature_enabled.prometheus_listener_enabled,
+        'PROMETHEUS listener tests are disabled in the tempest configuration.')
+    def test_tls_prometheus_client_auth_mandatory(self):
+        if not self.mem_listener_client.is_version_supported(
+                self.api_version, '2.25'):
+            raise self.skipException('Prometheus listeners are only available '
+                                     'on Octavia API version 2.25 or newer.')
+        LISTENER1_TCP_PORT = '9443'
+        listener_name = data_utils.rand_name(
+            "lb_member_listener1-prometheus-client-auth-mand")
+        listener_kwargs = {
+            const.NAME: listener_name,
+            const.PROTOCOL: const.PROMETHEUS,
+            const.PROTOCOL_PORT: LISTENER1_TCP_PORT,
+            const.LOADBALANCER_ID: self.lb_id,
+            const.DEFAULT_TLS_CONTAINER_REF: self.server_secret_ref,
+            const.CLIENT_AUTHENTICATION: const.CLIENT_AUTH_MANDATORY,
+            const.CLIENT_CA_TLS_CONTAINER_REF: self.client_ca_cert_ref,
+            const.CLIENT_CRL_CONTAINER_REF: self.client_crl_ref,
+        }
+        listener = self.mem_listener_client.create_listener(**listener_kwargs)
+        self.listener_id = listener[const.ID]
+        self.addCleanup(
+            self.mem_listener_client.cleanup_listener,
+            self.listener_id,
+            lb_client=self.mem_lb_client, lb_id=self.lb_id)
+
+        waiters.wait_for_status(self.mem_lb_client.show_loadbalancer,
+                                self.lb_id, const.PROVISIONING_STATUS,
+                                const.ACTIVE,
+                                CONF.load_balancer.build_interval,
+                                CONF.load_balancer.build_timeout)
+
+        # Test that no client certificate fails to connect
+        self.assertRaises(
+            requests.exceptions.SSLError,
+            requests.get,
+            'https://{0}:{1}'.format(self.lb_vip_address, LISTENER1_TCP_PORT),
+            timeout=12, verify=False)
+
+        # Test that a revoked client certificate fails to connect
+        with tempfile.NamedTemporaryFile(buffering=0) as cert_file:
+            cert_file.write(self.revoked_client_cert.public_bytes(
+                serialization.Encoding.PEM))
+            with tempfile.NamedTemporaryFile(buffering=0) as key_file:
+                key_file.write(self.revoked_client_key.private_bytes(
+                    serialization.Encoding.PEM,
+                    serialization.PrivateFormat.TraditionalOpenSSL,
+                    serialization.NoEncryption()))
+                self.assertRaises(
+                    requests.exceptions.SSLError, requests.get,
+                    'https://{0}:{1}'.format(self.lb_vip_address,
+                                             LISTENER1_TCP_PORT),
+                    timeout=12, verify=False, cert=(cert_file.name,
+                                                    key_file.name))
+
+        # Test that a valid client certificate can connect
+        with tempfile.NamedTemporaryFile(buffering=0) as cert_file:
+            cert_file.write(self.client_cert.public_bytes(
+                serialization.Encoding.PEM))
+            with tempfile.NamedTemporaryFile(buffering=0) as key_file:
+                key_file.write(self.client_key.private_bytes(
+                    serialization.Encoding.PEM,
+                    serialization.PrivateFormat.TraditionalOpenSSL,
+                    serialization.NoEncryption()))
+                response = requests.get(
+                    'https://{0}:{1}'.format(self.lb_vip_address,
+                                             LISTENER1_TCP_PORT),
+                    timeout=12, verify=False, cert=(cert_file.name,
+                                                    key_file.name))
+                self.assertEqual(200, response.status_code)

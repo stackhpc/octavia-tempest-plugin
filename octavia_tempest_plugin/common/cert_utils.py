@@ -17,9 +17,10 @@ import datetime
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.serialization import NoEncryption
+from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography import x509
 from cryptography.x509.oid import NameOID
-import OpenSSL
 
 
 def generate_ca_cert_and_key():
@@ -174,22 +175,14 @@ def generate_client_cert_and_key(ca_cert, ca_key, client_uuid):
 def generate_pkcs12_bundle(server_cert, server_key):
     """Creates a pkcs12 formated bundle.
 
-    Note: This uses pyOpenSSL as the cryptography package does not yet
-          support creating pkcs12 bundles. The currently un-released
-          2.5 version of cryptography supports reading pkcs12, but not
-          creation. This method should be updated to only use
-          cryptography once it supports creating pkcs12 bundles.
-
     :param server_cert: A cryptography certificate (x509) object.
     :param server_key: A cryptography key (x509) object.
     :returns: A pkcs12 bundle.
     """
-    # TODO(johnsom) Replace with cryptography once it supports creating pkcs12
-    pkcs12 = OpenSSL.crypto.PKCS12()
-    pkcs12.set_privatekey(
-        OpenSSL.crypto.PKey.from_cryptography_key(server_key))
-    pkcs12.set_certificate(OpenSSL.crypto.X509.from_cryptography(server_cert))
-    return pkcs12.export()
+    p12 = pkcs12.serialize_key_and_certificates(
+        b'', server_key, server_cert,
+        cas=None, encryption_algorithm=NoEncryption())
+    return p12
 
 
 def generate_certificate_revocation_list(ca_cert, ca_key, cert_to_revoke):
